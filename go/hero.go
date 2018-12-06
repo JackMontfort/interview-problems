@@ -10,7 +10,8 @@ import (
 	"log"
 	"net/http"
 	//"reflect"
-	//"strconv"
+	"strconv"
+	"sync"
 )
 
 // PROBLEM DESCRIPTION:
@@ -85,11 +86,19 @@ type makeresult struct {
 	Hero   hero   `json:"Hero"`
 }
 
+type calamityresult struct {
+	Status string `json:"Status"`
+	Heros  []hero `json:"Heros Involved"`
+}
+
 var heros []hero
+
+var mu sync.Mutex
 
 // TODO: add storage and memory management
 
 func herosGet(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
 	var result allheros
 	result.Heros = heros
 	var tot int
@@ -128,10 +137,12 @@ func herosGet(w http.ResponseWriter, r *http.Request) {
 	} else {
 		json.NewEncoder(w).Encode("No heros found.")
 	}
+	mu.Unlock()
 	return
 }
 
 func heroGet(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
 	var name string
 	var found bool
 	var ok bool
@@ -152,10 +163,12 @@ func heroGet(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(heros[last])
 		}
 	}
+	mu.Unlock()
 	return
 }
 
 func heroMake(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
 	var h hero
 	var result makeresult
 	err := json.NewDecoder(r.Body).Decode(&h)
@@ -185,10 +198,12 @@ func heroMake(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(result)
 		}
 	}
+	mu.Unlock()
 	return
 }
 
 func heroKill(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
 	var found bool
 	var name string
 	var ok bool
@@ -223,10 +238,12 @@ func heroKill(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(result)
 		}
 	}
+	mu.Unlock()
 	return
 }
 
 func heroRetire(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
 	var found bool
 	var name string
 	var ok bool
@@ -262,10 +279,12 @@ func heroRetire(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(result)
 		}
 	}
+	mu.Unlock()
 	return
 }
 
 func heroRest(w http.ResponseWriter, r *http.Request) { //FIND LAST HERO
+	mu.Lock()
 	var name string
 	var found bool
 	found = false
@@ -301,17 +320,72 @@ func heroRest(w http.ResponseWriter, r *http.Request) { //FIND LAST HERO
 			json.NewEncoder(w).Encode(result)
 		}
 	}
+	mu.Unlock()
 	return
 }
 
 func calamity(w http.ResponseWriter, r *http.Request) {
-	var power string
+	mu.Lock()
+	var p string
 	var ok bool
-	if power, ok = mux.Vars(r)["power"]; !ok {
+	var result calamityresult
+	if p, ok = mux.Vars(r)["power"]; !ok {
 		json.NewEncoder(w).Encode("Input invalid.")
 	} else {
-		log.Println(power)
+		var actives []int
+		powerNeeded, err := strconv.Atoi(p)
+		if err != nil {
+			json.NewEncoder(w).Encode("Input could not be parsed as an integer.")
+		} else {
+			for i, item := range heros {
+				if item.Status == "Active" {
+					actives = append(actives, i)
+				}
+			}
+			var totalPower = 0
+			for _, item := range actives {
+				totalPower = totalPower + heros[item].PowerLevel
+			}
+			var hold int
+			for i, spot := range actives {
+				var min = i
+				for j, item := range actives[i:] {
+					if heros[item].Exhaustion < heros[min].Exhaustion {
+						min = j
+					}
+				}
+				hold = spot
+				spot = actives[min]
+				actives[min] = hold
+			}
+			if totalPower < powerNeeded {
+				var finalherolist []hero
+				for _, item := range actives {
+					heros[item].Exhaustion = heros[item].Exhaustion + 1
+					finalherolist = append(finalherolist, heros[item])
+				}
+				result.Status = "The combined power of all of the active heros was not enough to overcome the calamity. All active heros have become more exhausted."
+				result.Heros = finalherolist
+				json.NewEncoder(w).Encode(result)
+			} else {
+				var starters []int
+				for powerNeeded > 0 {
+					powerNeeded = powerNeeded - heros[actives[0]].PowerLevel
+					starters = append(starters, actives[0])
+					actives = actives[1:]
+				}
+				var finalherolist []hero
+				for _, item := range starters {
+					heros[item].Exhaustion = heros[item].Exhaustion + 1
+					finalherolist = append(finalherolist, heros[item])
+				}
+				result.Status = "The heros took care of the calamity. All heros involved became more exhausted."
+				result.Heros = finalherolist
+				json.NewEncoder(w).Encode(result)
+			}
+		}
 	}
+	mu.Unlock()
 	return
 }
 
@@ -322,7 +396,7 @@ func linkRoutes(r *mux.Router) {
 	r.HandleFunc("/hero/{name}/retire", heroRetire).Methods("PUT")
 	r.HandleFunc("/hero/{name}/rest", heroRest).Methods("PUT")
 	r.HandleFunc("/hero/{name}/kill", heroKill).Methods("PUT")
-	r.HandleFunc("/hero/calamity/{power}", calamity).Methods("PUT")
+	r.HandleFunc("/calamity/{power}", calamity).Methods("PUT")
 }
 
 func main() {
