@@ -43,7 +43,7 @@ def find_geo_seq(l, r):
         index = 0
         for x in l:
             secondIndex = index+1
-            for y in l[index+1:]:
+            for y in l[secondIndex:]:
                 if y==x*r:
                     for z in l[secondIndex+1:]:
                         if z==y*r:
