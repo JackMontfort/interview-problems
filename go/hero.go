@@ -1,12 +1,16 @@
+//https://www.codementor.io/codehakase/building-a-restful-api-with-golang-a6yivzqdo
+
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"github.com/gorilla/mux"
+	//"io/ioutil"
 	"log"
 	"net/http"
-
-	"github.com/gorilla/mux"
+	//"reflect"
+	//"strconv"
 )
 
 // PROBLEM DESCRIPTION:
@@ -45,53 +49,301 @@ import (
 var maxExhaustion = 10
 
 type hero struct {
+	Name       string `json:"Name"`
 	PowerLevel int    `json:"PowerLevel"`
 	Exhaustion int    `json:"Exhaustion"`
-	Name       string `json:"Name"`
-	// TODO: changeme?
+	Status     string `json:"Status"`
 }
+
+type allheros struct {
+	Total      int    `json:"Total Heros"`
+	Active     int    `json:"Total Active"`
+	Retired    int    `json:"Total Retired"`
+	KIA        int    `json:"Total KIA"`
+	Power      int    `json:"Total Power"`
+	Exhaustion int    `json:"Total Exhaustion"`
+	Heros      []hero `json:"Hero List"`
+}
+
+type restresult struct {
+	Status string `json:"Status"`
+	Hero   hero   `json:"Hero"`
+}
+
+type retireresult struct {
+	Status string `json:"Status"`
+	Hero   hero   `json:"Hero"`
+}
+
+type killedresult struct {
+	Status string `json:"Status"`
+	Hero   hero   `json:"Hero"`
+}
+
+type makeresult struct {
+	Status string `json:"Status"`
+	Hero   hero   `json:"Hero"`
+}
+
+var heros []hero
 
 // TODO: add storage and memory management
 
-// TODO: add more routines
+func herosGet(w http.ResponseWriter, r *http.Request) {
+	var result allheros
+	result.Heros = heros
+	var tot int
+	var pow int
+	var exh int
+	var kia int
+	var ret int
+	var act int
+	tot = 0
+	pow = 0
+	exh = 0
+	kia = 0
+	ret = 0
+	act = 0
+	for _, item := range heros {
+		pow = pow + item.PowerLevel
+		exh = exh + item.Exhaustion
+		if item.Status == "KIA" {
+			kia = kia + 1
+		} else if item.Status == "Retired" {
+			ret = ret + 1
+		} else if item.Status == "Active" {
+			act = act + 1
+		}
+		tot = tot + 1
+	}
+	if tot > 0 {
+		result.Total = tot
+		result.Active = act
+		result.Retired = ret
+		result.KIA = kia
+		result.Power = pow
+		result.Exhaustion = exh
+		result.Heros = heros
+		json.NewEncoder(w).Encode(result)
+	} else {
+		json.NewEncoder(w).Encode("No heros found.")
+	}
+	return
+}
 
 func heroGet(w http.ResponseWriter, r *http.Request) {
-	// TODO: access the global tracking to return the hero object
 	var name string
+	var found bool
 	var ok bool
+	var last int
 	if name, ok = mux.Vars(r)["name"]; !ok {
-		// TODO: Handle not ok
+		json.NewEncoder(w).Encode("Input invalid.")
+	} else {
+		found = false
+		for index, item := range heros {
+			if item.Name == name {
+				found = true
+				last = index
+			}
+		}
+		if found == false {
+			json.NewEncoder(w).Encode("Unable to find hero.")
+		} else {
+			json.NewEncoder(w).Encode(heros[last])
+		}
 	}
-	_ = name // TODO: something with name
-	w.WriteHeader(http.StatusNotImplemented)
 	return
 }
 
 func heroMake(w http.ResponseWriter, r *http.Request) {
-	// TODO : create a hero and add to some sort of global tracking
-	content, err := ioutil.ReadAll(r.Body)
-	_ = content // TODO something with the body
-	_ = err     // TODO handle read error
-	w.WriteHeader(http.StatusNotImplemented)
+	var h hero
+	var result makeresult
+	err := json.NewDecoder(r.Body).Decode(&h)
+	if err != nil {
+		json.NewEncoder(w).Encode("Input invalid.")
+	} else {
+		var valid = true
+		for _, item := range heros {
+			if item.Name == h.Name {
+				if item.Status != "Retired" {
+					valid = false
+					h.Status = item.Status
+					if item.Status == "Active" {
+						json.NewEncoder(w).Encode("Hero creation failed. This hero name is already in active use.")
+					} else if item.Status == "KIA" {
+						json.NewEncoder(w).Encode("Hero creation failed. This hero name was retired when the previous holder was killed in action.")
+					}
+				}
+			}
+		}
+		if valid == true {
+			h.Status = "Active"
+			h.Exhaustion = 0
+			result.Hero = h
+			heros = append(heros, h)
+			result.Status = "Hero sucessfully created."
+			json.NewEncoder(w).Encode(result)
+		}
+	}
+	return
+}
+
+func heroKill(w http.ResponseWriter, r *http.Request) {
+	var found bool
+	var name string
+	var ok bool
+	var last int
+	found = false
+	var result killedresult
+	if name, ok = mux.Vars(r)["name"]; !ok {
+		json.NewEncoder(w).Encode("Input invalid.")
+	} else {
+		found = false
+		for index, item := range heros {
+			if item.Name == name {
+				last = index
+				found = true
+			}
+		}
+		if found == false {
+			json.NewEncoder(w).Encode("Unable to find any hero by that name.")
+		} else {
+			result.Hero = heros[last]
+			if heros[last].Status == "Active" {
+				heros[last].Status = "KIA"
+				heros[last].Exhaustion = 0
+				heros[last].PowerLevel = 0
+				result.Hero = heros[last]
+				result.Status = "Hero Sucessfully Killed"
+			} else if heros[last].Status == "KIA" {
+				result.Status = "This hero was already dead."
+			} else if heros[last].Status == "Retired" {
+				result.Status = "This hero is already retired and cannot be killed in action."
+			}
+			json.NewEncoder(w).Encode(result)
+		}
+	}
+	return
+}
+
+func heroRetire(w http.ResponseWriter, r *http.Request) {
+	var found bool
+	var name string
+	var ok bool
+	var last int
+	found = false
+	var result retireresult
+
+	if name, ok = mux.Vars(r)["name"]; !ok {
+		json.NewEncoder(w).Encode("Input invalid.")
+	} else {
+		found = false
+		for index, item := range heros {
+			if item.Name == name {
+				last = index
+				found = true
+			}
+		}
+		if found == false {
+			json.NewEncoder(w).Encode("Unable to find any hero by that name.")
+		} else {
+			result.Hero = heros[last]
+			if heros[last].Status == "Active" {
+				heros[last].Status = "Retired"
+				heros[last].Exhaustion = 0
+				heros[last].PowerLevel = 0
+				result.Hero = heros[last]
+				result.Status = "Hero Sucessfully Retired"
+			} else if heros[last].Status == "KIA" {
+				result.Status = "This hero was killed in action before they could retire."
+			} else if heros[last].Status == "Retired" {
+				result.Status = "This hero is already retired."
+			}
+			json.NewEncoder(w).Encode(result)
+		}
+	}
+	return
+}
+
+func heroRest(w http.ResponseWriter, r *http.Request) { //FIND LAST HERO
+	var name string
+	var found bool
+	found = false
+	var ok bool
+	var last int
+	var result restresult
+
+	if name, ok = mux.Vars(r)["name"]; !ok {
+		json.NewEncoder(w).Encode("Input invalid.")
+	} else {
+		for index, item := range heros {
+			if item.Name == name {
+				last = index
+				found = true
+			}
+		}
+		if found == false {
+			json.NewEncoder(w).Encode("Unable to find hero.")
+		} else {
+			result.Hero = heros[last]
+			if heros[last].Status == "KIA" {
+				result.Status = "Hero is dead and cannot rest."
+			} else if heros[last].Status == "Retired" {
+				result.Status = "Hero is retired and does not need to rest."
+			} else if heros[last].Status == "Active" {
+				if heros[last].Exhaustion > 0 {
+					heros[last].Exhaustion = heros[last].Exhaustion - 1
+					result.Status = "Hero successfully rested."
+				} else {
+					result.Status = "Hero was already fully rested."
+				}
+			}
+			json.NewEncoder(w).Encode(result)
+		}
+	}
+	return
+}
+
+func calamity(w http.ResponseWriter, r *http.Request) {
+	var power string
+	var ok bool
+	if power, ok = mux.Vars(r)["power"]; !ok {
+		json.NewEncoder(w).Encode("Input invalid.")
+	} else {
+		log.Println(power)
+	}
 	return
 }
 
 func linkRoutes(r *mux.Router) {
 	r.HandleFunc("/hero", heroMake).Methods("POST")
+	r.HandleFunc("/hero", herosGet).Methods("GET")
 	r.HandleFunc("/hero/{name}", heroGet).Methods("GET")
-	// TODO: add more routes
+	r.HandleFunc("/hero/{name}/retire", heroRetire).Methods("PUT")
+	r.HandleFunc("/hero/{name}/rest", heroRest).Methods("PUT")
+	r.HandleFunc("/hero/{name}/kill", heroKill).Methods("PUT")
+	r.HandleFunc("/hero/calamity/{power}", calamity).Methods("PUT")
 }
 
 func main() {
+	fmt.Printf("1\n")
 	// create a router
 	router := mux.NewRouter()
+	fmt.Printf("2\n")
 	// and a server to listen on port 8081
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", 8081),
 		Handler: router,
 	}
+	fmt.Printf("3\n")
 	// link the supplied routes
 	linkRoutes(router)
+	fmt.Printf("4\n")
 	// wait for requests
 	log.Fatal(server.ListenAndServe())
+	fmt.Printf("5\n")
 }
+
+//https://www.codementor.io/codehakase/building-a-restful-api-with-golang-a6yivzqdo
+
+//https://pragmacoders.com/building-a-json-api-in-golang/
