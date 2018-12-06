@@ -22,8 +22,35 @@
 # count = 8
 
 def find_geo_seq(l, r):
-    # code here
-    return 0
+    if r==1:
+        list=[]
+        total = 0
+        for x in l:
+            go = True
+            for y in list:
+                if y==x:
+                    go=False
+            if go==True:
+                list.append(x)
+                count = 0
+                for z in l:
+                    if z==x:
+                        count+=1
+                total = total + ((count*(count-1)*(count-2))/6)
+        return total
+    else:
+        total = 0
+        index = 0
+        for x in l:
+            secondIndex = index+1
+            for y in l[index+1:]:
+                if y==x*r:
+                    for z in l[secondIndex+1:]:
+                        if z==y*r:
+                            total+=1
+                secondIndex+=1
+            index+=1
+        return total
 
 test_cases = [
     ([1, 2, 2, 4], 2, 2),
@@ -36,4 +63,5 @@ test_cases = [
 
 for case in test_cases:
     l, r, output = case
+    
     print(find_geo_seq(l, r) == output)
