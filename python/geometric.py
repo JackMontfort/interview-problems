@@ -5,21 +5,9 @@
 # 2. {l[i], l[j], l[k]} is a geometric sequence with a common ratio r
 # i.e. r*l[i] == l[j], r*l[j] == l[k] 
 
-# Example:
-# l = [1,1,5,25,25,125,625]
-# r = 5
-
-# quads = [
-#     (0, 2, 3)
-#     (0, 2, 4),
-#     (1, 2, 3),
-#     (1, 2, 4),
-#     (2, 3, 5),
-#     (2, 4, 5),
-#     (3, 5, 6),
-#     (4, 5, 6)
-# ]
-# count = 8
+#we need a special case for when r is 1 because in this case, the numbers are all the same and so can be in any order. This makes the brute force solution used for other cases too slow.
+#when r is 1, we create a list of each unique value, and then we count how many times each value appears and use the formula f(count)=((count)*(count-1)*(count-2))/6 to find the total number of solutions for each unique value, then total them.
+#in any other case besides r=1, we simply assume that any index can be i, then we use a brute force search to search for valid j indicies and then for valid k indicies for each valid j index.
 
 def find_geo_seq(l, r):
     if r==1:
