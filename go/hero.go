@@ -192,8 +192,8 @@ func heroMake(w http.ResponseWriter, r *http.Request) {
 		if valid == true {
 			h.Status = "Active"
 			h.Exhaustion = 0
-			result.Hero = h
 			heros = append(heros, h)
+			result.Hero = h
 			result.Status = "Hero sucessfully created."
 			json.NewEncoder(w).Encode(result)
 		}
@@ -283,7 +283,7 @@ func heroRetire(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func heroRest(w http.ResponseWriter, r *http.Request) { //FIND LAST HERO
+func heroRest(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	var name string
 	var found bool
@@ -332,7 +332,7 @@ func calamity(w http.ResponseWriter, r *http.Request) {
 	if p, ok = mux.Vars(r)["power"]; !ok {
 		json.NewEncoder(w).Encode("Input invalid.")
 	} else {
-		var actives []int
+		var actives []int //a list of indexes of active heros
 		powerNeeded, err := strconv.Atoi(p)
 		if err != nil {
 			json.NewEncoder(w).Encode("Input could not be parsed as an integer.")
@@ -342,12 +342,8 @@ func calamity(w http.ResponseWriter, r *http.Request) {
 					actives = append(actives, i)
 				}
 			}
-			var totalPower = 0
-			for _, item := range actives {
-				totalPower = totalPower + heros[item].PowerLevel
-			}
 			var hold int
-			for i, spot := range actives {
+			for i, spot := range actives { //sorts by exhaustion level. Heros with lowest exhaustion are used first.
 				var min = i
 				for j, item := range actives[i:] {
 					if heros[item].Exhaustion < heros[min].Exhaustion {
@@ -357,6 +353,10 @@ func calamity(w http.ResponseWriter, r *http.Request) {
 				hold = spot
 				spot = actives[min]
 				actives[min] = hold
+			}
+			var totalPower = 0
+			for _, item := range actives {
+				totalPower = totalPower + heros[item].PowerLevel
 			}
 			if totalPower < powerNeeded {
 				var finalherolist []hero
@@ -393,10 +393,10 @@ func linkRoutes(r *mux.Router) {
 	r.HandleFunc("/hero", heroMake).Methods("POST")
 	r.HandleFunc("/hero", herosGet).Methods("GET")
 	r.HandleFunc("/hero/{name}", heroGet).Methods("GET")
-	r.HandleFunc("/hero/{name}/retire", heroRetire).Methods("PUT")
-	r.HandleFunc("/hero/{name}/rest", heroRest).Methods("PUT")
-	r.HandleFunc("/hero/{name}/kill", heroKill).Methods("PUT")
-	r.HandleFunc("/calamity/{power}", calamity).Methods("PUT")
+	r.HandleFunc("/hero/{name}/retire", heroRetire).Methods("PATCH")
+	r.HandleFunc("/hero/{name}/rest", heroRest).Methods("PATCH")
+	r.HandleFunc("/hero/{name}/kill", heroKill).Methods("PATCH")
+	r.HandleFunc("/calamity/{power}", calamity).Methods("PATCH")
 }
 
 func main() {
